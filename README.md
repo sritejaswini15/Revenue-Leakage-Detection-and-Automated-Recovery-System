@@ -2,8 +2,6 @@
 
 **An AI-assisted revenue recovery control plane for Razorpay merchants.** RecoverX turns failed payments, halted subscriptions, overdue invoices and abandoned checkouts into tracked recovery cases. It scores each case, has an advisor recommend a strategy, checks that strategy against the merchant's own policy, acts through a single audited gateway, and measures the money that comes back.
 
-[![CI](https://github.com/sritejaswini15/recoverx/actions/workflows/ci.yml/badge.svg)](https://github.com/sritejaswini15/recoverx/actions/workflows/ci.yml)
-
 ![Command center](docs/screenshots/command-center.png)
 
 ## The problem
@@ -197,5 +195,3 @@ The Integrations page reports this state at runtime.
 ## Documentation
 
 [Architecture](docs/ARCHITECTURE.md) · [API](docs/API.md) · [AI advisor](docs/AI.md) · [MCP](docs/MCP.md) · [Development](docs/DEVELOPMENT.md) · [Deployment](docs/DEPLOYMENT.md) · [Environment](docs/ENVIRONMENT.md)
-
-## Author
