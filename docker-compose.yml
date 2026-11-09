@@ -1,0 +1,79 @@
+# Full local stack: PostgreSQL, API and web app.
+#   docker compose up --build
+# Optional durable workflows (Temporal server + worker):
+#   TEMPORAL_ENABLED=true docker compose --profile workflows up --build
+# The web app is at http://localhost:3000, the API at http://localhost:8000/docs.
+
+x-backend-env: &backend-env
+  ENVIRONMENT: development
+  DATABASE_URL: postgresql://recoverx:recoverx@postgres:5432/recoverx
+  SEED_DEMO_DATA: "true"
+  BOOTSTRAP_RAZORPAY_ACCOUNT_ID: acct_local_demo
+  CORS_ORIGINS: http://localhost:3000
+  TEMPORAL_ENABLED: ${TEMPORAL_ENABLED:-false}
+  TEMPORAL_HOST: temporal:7233
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: recoverx
+      POSTGRES_USER: recoverx
+      POSTGRES_PASSWORD: recoverx
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U recoverx"]
+      interval: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    environment: *backend-env
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Server-side proxy target for /api/*: the backend on the Compose network.
+        API_URL: http://backend:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+  temporal:
+    profiles: [workflows]
+    image: temporalio/auto-setup:latest
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: recoverx
+      POSTGRES_PWD: recoverx
+      POSTGRES_SEEDS: postgres
+    ports:
+      - "7233:7233"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    profiles: [workflows]
+    build: ./backend
+    command: python -m app.infrastructure.temporal.worker
+    environment:
+      <<: *backend-env
+      TEMPORAL_ENABLED: "true"
+    depends_on:
+      - backend
+      - temporal
+
+volumes:
+  postgres-data:

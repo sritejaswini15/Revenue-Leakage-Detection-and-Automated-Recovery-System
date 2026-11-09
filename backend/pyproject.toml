@@ -1,0 +1,44 @@
+[project]
+name = "recoverx-backend"
+version = "1.0.0"
+description = "RecoverX API: AI revenue recovery control plane for Razorpay merchants"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-p no:cacheprovider"
+filterwarnings = ["ignore::DeprecationWarning:starlette.*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # import order
+    "B",        # bugbear
+    "UP",       # modern syntax
+    "S",        # security
+    "SIM",      # simplifications
+    "RUF",      # ruff-specific
+    "BLE",      # blind except
+    "ARG",      # unused arguments
+    "ANN",      # annotations on public functions
+]
+ignore = [
+    "RUF001",   # ₹ and en dashes are intentional in user-facing text
+    "RUF002",
+    "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "ANN", "ARG001"]
+"scripts/**" = ["T201"]
+
+[tool.ruff.lint.flake8-annotations]
+mypy-init-return = true
+suppress-dummy-args = true

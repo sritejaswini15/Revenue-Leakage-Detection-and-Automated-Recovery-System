@@ -1,0 +1,108 @@
+# Render Blueprint for RecoverX. See docs/DEPLOYMENT.md.
+# Values marked `sync: false` are secrets you enter in the Render dashboard.
+# Replace the two *.onrender.com URLs with the URLs Render assigns your services.
+
+databases:
+  - name: recoverx-postgres
+    plan: 0.1c-256mb
+    databaseName: recoverx
+    user: recoverx
+
+services:
+  - type: web
+    name: recoverx-api
+    runtime: docker
+    rootDir: backend
+    plan: 0.5c-512mb
+    healthCheckPath: /health
+    # The image runs `alembic upgrade head` before starting the API.
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: recoverx-postgres
+          property: connectionString
+      - key: AUTH_SECRET
+        generateValue: true
+      # Encrypts merchants' Razorpay secrets at rest. Never change it once credentials are stored.
+      - key: CREDENTIALS_ENCRYPTION_KEY
+        generateValue: true
+      - key: ALLOW_LIVE_PAYMENTS
+        value: "false" # only rzp_test_ keys are accepted
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+      - key: BOOTSTRAP_ADMIN_EMAIL
+        sync: false
+      - key: BOOTSTRAP_ADMIN_PASSWORD
+        sync: false
+      - key: BOOTSTRAP_RAZORPAY_ACCOUNT_ID
+        sync: false
+      - key: PAYMENT_PROVIDER
+        value: simulated # set to razorpay with test-mode keys to use the real API
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: SEED_DEMO_DATA
+        value: "false"
+      - key: CORS_ORIGINS
+        value: https://recoverx-frontend.onrender.com
+      # Follow-ups run from the hourly job below. Setting this to true also needs a Temporal
+      # worker service and Temporal Cloud (docs/DEPLOYMENT.md); the job reads the same value.
+      - key: TEMPORAL_ENABLED
+        value: "false"
+      # Recovery advisor: rules, or anthropic to let Claude recommend (docs/AI.md)
+      - key: LLM_PROVIDER
+        value: rules
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+
+  - type: web
+    name: recoverx-frontend
+    runtime: docker
+    rootDir: frontend
+    plan: 0.5c-512mb
+    healthCheckPath: /login
+    envVars:
+      # The API the web server proxies /api/* to. Read at image build time; redeploy after changing it.
+      - key: NEXT_PUBLIC_API_URL
+        value: https://recoverx-api.onrender.com
+
+  - type: cron
+    name: recoverx-cleanup
+    runtime: docker
+    rootDir: backend
+    plan: 0.5c-512mb
+    # Hourly: expire stale links, then send due reminders, escalations and promise checks
+    # (the in-process replacement for Temporal timers).
+    schedule: "15 * * * *"
+    dockerCommand: sh -c "python -m scripts.expire_payment_links && python -m scripts.run_due_workflows"
+    # Expiry cancels links through each merchant's own Razorpay keys, so the job shares the
+    # API's configuration, including the key that decrypts them.
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: recoverx-postgres
+          property: connectionString
+      - key: CREDENTIALS_ENCRYPTION_KEY
+        fromService: { type: web, name: recoverx-api, envVarKey: CREDENTIALS_ENCRYPTION_KEY }
+      - key: AUTH_SECRET
+        fromService: { type: web, name: recoverx-api, envVarKey: AUTH_SECRET }
+      - key: PAYMENT_PROVIDER
+        fromService: { type: web, name: recoverx-api, envVarKey: PAYMENT_PROVIDER }
+      - key: RAZORPAY_KEY_ID
+        fromService: { type: web, name: recoverx-api, envVarKey: RAZORPAY_KEY_ID }
+      - key: RAZORPAY_KEY_SECRET
+        fromService: { type: web, name: recoverx-api, envVarKey: RAZORPAY_KEY_SECRET }
+      - key: BOOTSTRAP_RAZORPAY_ACCOUNT_ID
+        fromService: { type: web, name: recoverx-api, envVarKey: BOOTSTRAP_RAZORPAY_ACCOUNT_ID }
+      # With Temporal on, the job only expires cases; Temporal sends the follow-ups.
+      - key: TEMPORAL_ENABLED
+        fromService: { type: web, name: recoverx-api, envVarKey: TEMPORAL_ENABLED }
+      - key: SENTRY_DSN
+        fromService: { type: web, name: recoverx-api, envVarKey: SENTRY_DSN }

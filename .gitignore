@@ -1,0 +1,28 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+!.env.production.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Local databases (development and tests)
+*.db
+*.db-shm
+*.db-wal
+
+# Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/test-results/
+frontend/playwright-report/
+*.tsbuildinfo
+
+# Editors and OS
+.DS_Store
+Thumbs.db
