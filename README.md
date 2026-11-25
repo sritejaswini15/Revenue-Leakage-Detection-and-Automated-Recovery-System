@@ -1,199 +1,834 @@
-# RecoverX
+# RecoverX – Revenue Leakage Detection and Automated Recovery System
 
-**An AI-assisted revenue recovery control plane for Razorpay merchants.** 
+**An AI-assisted revenue recovery and payment intelligence platform for Razorpay merchants.**
 
-RecoverX turns failed payments, halted subscriptions, overdue invoices and abandoned checkouts into tracked recovery cases. It scores each case, has an advisor recommend a strategy, checks that strategy against the merchant's own policy, acts through a single audited gateway, and measures the money that comes back.
+RecoverX is a revenue recovery control plane designed to identify, prioritize, and automate the resolution of failed payments, overdue invoices, halted subscriptions, and abandoned checkouts.
 
-![Command center](docs/screenshots/command-center.png)
+The platform combines deterministic risk assessment, AI-assisted recovery recommendations, merchant-defined policy enforcement, and controlled action execution to help businesses recover lost revenue while maintaining operational oversight, security, and accountability.
 
-## The problem
+Every recovery case follows a structured workflow: event ingestion, risk assessment, strategy recommendation, policy validation, controlled execution, and outcome tracking.
 
-A share of every merchant's revenue never arrives: a card is declined, a UPI mandate fails, an invoice slips past its due date, a customer abandons a checkout. Chasing it by hand doesn't scale, and fully automatic dunning creates new risks. It can message customers who opted out, act on large amounts without anyone looking, retry a payment twice, or leave no record of who decided what.
+![RecoverX Command Center](docs/screenshots/command-center.png)
 
-RecoverX automates the routine recoveries and keeps people in control of the rest. Every action passes a deterministic policy check, every decision is explained, and every step is written to an audit trail.
+---
 
-## Features
+## Overview
 
-- **Signed webhook ingestion.** HMAC-SHA256 verification per merchant, replay-safe deduplication by event id, and normalization of Razorpay events into one canonical revenue event (paise → rupees).
-- **Deterministic risk engine.** Risk score, recovery probability and expected recovery value from the customer's history. Cases are worked in order of expected recovery, not amount.
-- **Recovery advisor (LangGraph).** Diagnoses each case and recommends one action. Its output is validated against a strict schema, retried once if invalid, then fails safe to human review. It runs on RecoverX's deterministic, rules-based logic. The advisor only recommends; it never authorizes or computes money.
-- **Merchant policy engine.** Amount limits, a confidence floor, contact limits, aging and opt-outs decide between *auto-approve*, *human review* and *stop*. The merchant's channels, languages and allowed actions are enforced at execution time.
-- **Tool Gateway.** The single path to every payment and messaging action. It re-checks policy, enforces idempotency and writes the audit trail, whoever asks: the advisor, an operator or an AI agent.
-- **Human review queue.** Escalations are sorted into review queues (high value, low confidence, missed promise, contact limit, requested review). Reviewers approve, edit the action, contact the customer, reject or close.
-- **Promise-to-pay, follow-ups and expiry.** Customers can promise a date; reminders and escalations follow on schedule (Temporal, or an hourly job); unpaid cases expire.
-- **Learning from outcomes.** Each closed case updates the customer's recovery rate and the action that works for them, which feeds the next decision.
-- **MCP server.** A Model Context Protocol endpoint (JSON-RPC, Streamable HTTP) exposing 15 tools (10 read, 5 write). They have the same role, tenant and policy checks as the UI.
-- **Failure Lab and evaluation.** Simulate provider timeouts, invalid AI output, low confidence, opt-outs, contact limits and promises through the real pipeline. A batch evaluation replays every case and reports policy violations, false escalations and recovered revenue.
-- **Operations UI.** Command Center, case investigation with explanations, review queue, transactions, customers (CSV import), analytics, policies, integrations, users and the audit trail.
-- **Security.** HttpOnly session cookies with CSRF protection, four roles enforced on the server, per-merchant data isolation, encrypted merchant credentials, login throttling, security headers, request IDs and redacted logs.
+Revenue leakage occurs when expected payments fail to materialize due to declined transactions, unsuccessful subscription renewals, overdue invoices, or abandoned checkouts.
+
+Managing these cases manually becomes increasingly difficult as transaction volumes grow. Unrestricted automation can introduce additional risks, including duplicate payment attempts, unauthorized customer communication, violations of merchant policies, and insufficient auditability.
+
+RecoverX addresses these challenges through a centralized recovery workflow that combines automation with deterministic controls and human oversight.
+
+### Core Capabilities
+
+- **Payment Event Ingestion:** Processes signed Razorpay webhooks and normalizes payment events into a canonical revenue event format.
+- **Revenue Leakage Detection:** Identifies and tracks failed payments, overdue invoices, halted subscriptions, and abandoned checkouts.
+- **Risk-Based Prioritization:** Calculates risk scores, recovery probabilities, and expected recovery values to prioritize cases.
+- **AI-Assisted Recovery Recommendations:** Uses LangGraph to analyze recovery cases and recommend appropriate actions.
+- **Policy-Driven Automation:** Enforces merchant-defined thresholds, confidence requirements, contact restrictions, and approval rules.
+- **Controlled Action Execution:** Routes all payment and messaging operations through a centralized, audited Tool Gateway.
+- **Human-in-the-Loop Review:** Escalates sensitive or uncertain cases for authorized human approval.
+- **Recovery Lifecycle Management:** Supports promises to pay, scheduled follow-ups, reminders, and case expiry.
+- **Outcome-Based Learning:** Updates customer recovery statistics and action effectiveness based on completed cases.
+- **MCP Integration:** Exposes recovery capabilities through a Model Context Protocol server for external AI agents.
+- **Failure Simulation and Evaluation:** Tests recovery workflows under simulated failures and evaluates policy compliance and recovery outcomes.
+- **Operational Analytics:** Provides dashboards for revenue recovery, transaction monitoring, customer management, and audit inspection.
+
+---
+
+## Key Features
+
+### 1. Webhook Ingestion and Event Processing
+
+RecoverX supports secure ingestion of payment events from Razorpay.
+
+The ingestion pipeline includes:
+
+- HMAC-SHA256 signature verification using merchant-specific webhook secrets.
+- Replay-safe event deduplication using event identifiers.
+- Normalization of provider-specific events into a canonical internal event representation.
+- Currency conversion from paise to rupees.
+- Processing of payment failures and successful payment events.
+- Structured event handling for downstream recovery workflows.
+
+This provides a consistent foundation for processing payment events and initiating recovery cases.
+
+### 2. Deterministic Risk Assessment
+
+The risk engine evaluates recovery cases using customer payment history and case-level information.
+
+It calculates:
+
+- Recovery risk score.
+- Estimated probability of successful recovery.
+- Expected recovery value.
+
+Cases are prioritized using expected recovery value rather than transaction amount alone.
+
+This allows the system to focus recovery efforts on cases with stronger estimated recovery potential.
+
+### 3. AI-Assisted Recovery Advisor
+
+RecoverX integrates **LangGraph** to provide structured recovery recommendations.
+
+The advisor analyzes recovery cases and recommends an appropriate recovery action based on the available case context.
+
+The recommendation pipeline includes:
+
+1. Case context preparation.
+2. Recovery strategy recommendation.
+3. Strict schema validation of AI-generated output.
+4. A single retry when the generated output is invalid.
+5. Fail-safe escalation to human review if validation fails.
+
+The advisor operates using RecoverX's deterministic, rules-based recovery logic.
+
+**AI is restricted to recommendation generation. It does not authorize actions, calculate financial amounts, or directly execute payment operations.**
+
+### 4. Merchant Policy Engine
+
+The policy engine evaluates proposed recovery actions against merchant-configured rules.
+
+Policy conditions include:
+
+- Maximum permitted transaction amount.
+- Minimum confidence thresholds.
+- Customer contact limits.
+- Payment and case aging restrictions.
+- Customer communication opt-outs.
+- Permitted communication channels.
+- Supported languages.
+- Allowed recovery actions.
+
+Based on the evaluation, the system assigns one of three outcomes:
+
+| Decision | Description |
+|---|---|
+| Auto-Approve | Action satisfies the merchant's configured automation policy. |
+| Human Review | Action requires authorized human intervention. |
+| Stop | Action violates policy or cannot proceed safely. |
+
+Policy validation is enforced again at execution time rather than relying exclusively on the advisor's recommendation.
+
+### 5. Centralized Tool Gateway
+
+The Tool Gateway acts as the single controlled execution layer for payment and messaging operations.
+
+All consequential actions, whether initiated by the advisor, an operator, or an external AI agent, pass through this gateway.
+
+Its responsibilities include:
+
+- Execution-time policy validation.
+- Idempotency enforcement.
+- Controlled interaction with payment and messaging providers.
+- Action authorization.
+- Audit event generation.
+- Consistent execution handling across different application interfaces.
+
+This architecture separates decision-making from action execution and prevents AI recommendations from directly triggering external operations.
+
+### 6. Human-in-the-Loop Recovery Management
+
+Cases requiring intervention are routed into dedicated review queues.
+
+Review categories include:
+
+- High-value recovery cases.
+- Low-confidence recommendations.
+- Missed payment promises.
+- Customer contact limit violations.
+- Explicitly requested reviews.
+
+Authorized reviewers can:
+
+- Approve recommended recovery actions.
+- Modify proposed actions.
+- Contact customers.
+- Reject recovery recommendations.
+- Close recovery cases.
+
+This provides operational oversight for decisions that should not be fully automated.
+
+### 7. Promise-to-Pay and Recovery Workflows
+
+RecoverX supports structured payment commitment tracking.
+
+Customers can submit a promised payment date, after which the system manages scheduled follow-ups and escalations.
+
+Workflow functionality includes:
+
+- Promise-to-pay tracking.
+- Scheduled customer reminders.
+- Follow-up execution.
+- Escalation for missed commitments.
+- Automatic case expiry.
+- Temporal-based durable workflows or an hourly scheduled job.
+
+### 8. Recovery Outcome Learning
+
+The system tracks completed recovery outcomes to improve subsequent customer-level decisions.
+
+Closed recovery cases update customer recovery statistics, including historical recovery rates and action effectiveness.
+
+This information contributes to future recovery prioritization and recommendation decisions.
+
+### 9. Model Context Protocol (MCP) Integration
+
+RecoverX includes an MCP server that exposes recovery functionality to compatible external AI agents.
+
+**Implementation details:**
+
+- JSON-RPC communication.
+- Streamable HTTP transport.
+- 15 exposed tools.
+- 10 read operations.
+- 5 write operations.
+
+MCP operations follow the same role-based authorization, tenant isolation, and policy enforcement requirements as the primary application.
+
+### 10. Failure Lab and Evaluation Framework
+
+The Failure Lab provides a controlled environment for testing recovery scenarios through the actual application pipeline.
+
+Supported simulation scenarios include:
+
+- Payment provider timeouts.
+- Invalid AI-generated recommendations.
+- Low-confidence decisions.
+- Customer communication opt-outs.
+- Contact limit violations.
+- Missed payment promises.
+
+A batch evaluation process replays recovery cases and reports:
+
+- Policy violations.
+- False escalations.
+- Recovered revenue.
+- Recovery workflow outcomes.
+
+This helps assess system behavior under both normal and exceptional operating conditions.
+
+### 11. Operational Dashboard
+
+The Next.js application provides a centralized interface for managing revenue recovery operations.
+
+Major application areas include:
+
+- Command Center.
+- Recovery case investigation.
+- Human review and escalation queues.
+- Transaction monitoring.
+- Customer management.
+- CSV customer import.
+- Revenue analytics.
+- Merchant policy configuration.
+- Payment and messaging integrations.
+- User and role management.
+- Audit trail inspection.
+- Failure simulation.
+
+---
 
 ## Screenshots
 
-| Case investigation | Human review queue |
+### Recovery Case Investigation and Human Review
+
+| Case Investigation | Human Review Queue |
 |---|---|
-| ![Case investigation](docs/screenshots/case-investigation.png) | ![Escalations](docs/screenshots/escalations.png) |
+| ![Case Investigation](docs/screenshots/case-investigation.png) | ![Human Review Queue](docs/screenshots/escalations.png) |
 
-![Integrations](docs/screenshots/integrations.png)
+### Integration Management
 
-*Screenshots use the built-in synthetic demo dataset; no real customer data.*
+![Integration Management](docs/screenshots/integrations.png)
 
-## Tech stack
+*Screenshots use the built-in synthetic demonstration dataset. No real customer data is displayed.*
+
+---
+
+## Technology Stack
 
 | Layer | Technologies |
 |---|---|
-| Backend | Python 3.13, FastAPI, SQLAlchemy 2, Alembic, Pydantic 2 |
-| AI and workflows | LangGraph (rules-based recovery advisor), Temporal SDK (optional durable workflows) |
-| Data | PostgreSQL in deployment; SQLite for local development and tests |
-| Frontend | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4, Recharts |
-| Quality | pytest, Ruff, ESLint, Prettier, Playwright, GitHub Actions (SQLite and PostgreSQL) |
-| Operations | Docker, Docker Compose, Render Blueprint, structured JSON logs, optional Sentry |
+| Backend | Python 3.13, FastAPI |
+| ORM and Database Migrations | SQLAlchemy 2, Alembic |
+| Data Validation | Pydantic 2 |
+| AI and Workflow Orchestration | LangGraph, Temporal SDK |
+| Database | PostgreSQL, SQLite |
+| Frontend | Next.js 16, React 19 |
+| Programming Languages | Python, TypeScript, JavaScript |
+| UI and Styling | Tailwind CSS 4 |
+| Data Visualization | Recharts |
+| API Integration | REST APIs, JSON-RPC, MCP |
+| Testing | pytest, Playwright |
+| Code Quality | Ruff, ESLint, Prettier |
+| CI/CD | GitHub Actions |
+| Containerization | Docker, Docker Compose |
+| Deployment | Render |
+| Monitoring and Logging | Structured JSON logging, optional Sentry |
 
-## Architecture
+---
 
-RecoverX is a modular monolith: one FastAPI service in clean-architecture layers (`api → application → domain ← infrastructure`), one PostgreSQL database and one Next.js app.
+## System Architecture
+
+RecoverX follows a **modular monolithic architecture** built around a layered FastAPI backend, a PostgreSQL database, and a Next.js frontend.
+
+The backend separates HTTP handling, application orchestration, business rules, and infrastructure integrations.
+
+### High-Level Architecture
 
 ```mermaid
-flowchart LR
-    RZP[Razorpay or simulator] -- signed webhook --> WH[Webhook ingestion<br/>verify, dedupe, normalize]
-    WH --> RISK[Risk engine<br/>deterministic]
-    RISK --> ADV[Recovery advisor<br/>LangGraph, rules-based]
-    ADV --> POL{Policy engine}
-    POL -- auto-approve --> GW[Tool Gateway<br/>idempotent, audited]
-    POL -- human review --> RQ[Review queue]
-    RQ -- approve / edit / contact --> GW
-    POL -- stop --> STOP[Case stopped]
-    GW --> PAY[Payment link or retry]
-    GW --> MSG[WhatsApp or email]
-    PAY -- customer pays --> RZP
-    WH -- payment success --> REC[Case recovered]
-    REC --> LEARN[Customer profile learns]
-    REC --> AN[Analytics and evaluation]
-    MCP[AI agents via MCP] --> GW
-    UI[Next.js operations UI] --> API[FastAPI]
+flowchart TD
+    RZP[Razorpay / Payment Simulator]
+
+    RZP --> WH[Webhook Ingestion]
+    WH --> VERIFY[Signature Verification]
+    VERIFY --> DEDUPE[Event Deduplication]
+    DEDUPE --> NORM[Event Normalization]
+
+    NORM --> RISK[Deterministic Risk Engine]
+    RISK --> ADV[LangGraph Recovery Advisor]
+
+    ADV --> POLICY{Merchant Policy Engine}
+
+    POLICY -->|Auto-Approve| GW[Tool Gateway]
+    POLICY -->|Human Review| REVIEW[Human Review Queue]
+    POLICY -->|Stop| STOP[Case Stopped]
+
+    REVIEW -->|Approve / Edit| GW
+
+    GW --> PAY[Payment Actions]
+    GW --> MSG[Messaging Actions]
+    GW --> AUDIT[(Audit Trail)]
+
+    PAY --> PROVIDER[Payment Provider]
+    MSG --> CHANNELS[WhatsApp / Email Simulator]
+
+    PROVIDER -->|Payment Success| RZP
+
+    RZP --> WH
+
+    GW --> LEARN[Customer Outcome Learning]
+    LEARN --> ANALYTICS[Recovery Analytics]
+
+    UI[Next.js Operations Dashboard] --> API[FastAPI Backend]
     API --> GW
-    GW -.-> AUD[(Audit trail)]
-    POL -.-> AUD
+
+    MCP[MCP Server / External AI Agents] --> GW
 ```
 
-**Design invariants**
+### Architectural Layers
 
-- The advisor recommends; the policy engine decides; only the Tool Gateway acts.
-- Amounts come from persisted records and provider events, never from the AI.
-- A recovered, stopped or expired case can't be reopened by a person or an agent; only a real payment moves it.
-- Every query is scoped to the caller's merchant, and every consequential change writes an audit event.
+| Layer | Responsibility |
+|---|---|
+| API | HTTP routes, request validation, authentication middleware, MCP endpoints, and response handling. |
+| Application | Recovery use cases, webhook processing, orchestration, case management, and execution workflows. |
+| Domain | Core business rules, risk calculations, policies, decisions, events, and recovery logic. |
+| Infrastructure | Database access, payment provider integrations, messaging adapters, LangGraph advisor, and Temporal workflows. |
+| Core | Application configuration, security utilities, encryption, and structured logging. |
 
-More detail is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+### Core Design Principles
 
-## Project structure
+**Separation of recommendation and authorization**
 
+The AI advisor recommends recovery actions. The deterministic policy engine decides whether an action is permitted. Only the Tool Gateway executes consequential operations.
+
+**Financial integrity**
+
+Financial amounts are derived from persisted records and payment provider events rather than AI-generated values.
+
+**Idempotent execution**
+
+Repeated events and requests are handled through deduplication and idempotency controls to prevent unintended duplicate operations.
+
+**Tenant isolation**
+
+Database queries and application operations are scoped to the authenticated merchant.
+
+**Controlled case transitions**
+
+Recovered, stopped, or expired cases cannot be reopened by operators or agents. A genuine payment event is required to transition a case into the recovered state.
+
+**Auditability**
+
+Consequential decisions and changes generate audit events, supporting operational traceability.
+
+For additional architectural information, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+---
+
+## Repository Structure
+
+```text
+Revenue-Leakage-Detection-and-Automated-Recovery-System/
+│
+├── backend/
+│   ├── app/
+│   │   ├── api/
+│   │   │   ├── HTTP routes
+│   │   │   ├── Request and response schemas
+│   │   │   ├── MCP server
+│   │   │   ├── Middleware
+│   │   │   └── Error handling
+│   │   │
+│   │   ├── application/
+│   │   │   ├── Webhook ingestion
+│   │   │   ├── Recovery case management
+│   │   │   ├── Tool Gateway
+│   │   │   ├── Simulation
+│   │   │   ├── Outcome learning
+│   │   │   └── Workflows
+│   │   │
+│   │   ├── domain/
+│   │   │   ├── Risk assessment
+│   │   │   ├── Policy engine
+│   │   │   ├── Events
+│   │   │   ├── Decisions
+│   │   │   └── Messaging rules
+│   │   │
+│   │   ├── infrastructure/
+│   │   │   ├── Database
+│   │   │   ├── Razorpay integration
+│   │   │   ├── Simulated providers
+│   │   │   ├── Messaging adapters
+│   │   │   ├── LangGraph advisor
+│   │   │   └── Temporal workflows
+│   │   │
+│   │   └── core/
+│   │       ├── Configuration
+│   │       ├── Logging
+│   │       ├── Security
+│   │       └── Encryption
+│   │
+│   ├── alembic/
+│   │   └── Database migrations
+│   │
+│   ├── scripts/
+│   │   ├── Seed data
+│   │   ├── Hourly jobs
+│   │   ├── Batch evaluation
+│   │   └── Razorpay test round trip
+│   │
+│   ├── tests/
+│   │   └── Unit and integration tests
+│   │
+│   └── requirements-dev.txt
+│
+├── frontend/
+│   ├── src/
+│   │   ├── app/
+│   │   ├── features/
+│   │   └── services/
+│   │       └── api/
+│   │
+│   ├── e2e/
+│   │   └── Playwright end-to-end tests
+│   │
+│   └── package.json
+│
+├── docs/
+│   ├── screenshots/
+│   ├── ARCHITECTURE.md
+│   ├── API.md
+│   ├── AI.md
+│   ├── MCP.md
+│   ├── DEVELOPMENT.md
+│   ├── DEPLOYMENT.md
+│   └── ENVIRONMENT.md
+│
+├── docker-compose.yml
+├── render.yaml
+├── .env.example
+├── .env.production.example
+└── README.md
 ```
-backend/
-  app/
-    api/              HTTP routes, schemas, MCP server, middleware, error mapping
-    application/      Use cases: ingestion, cases, Tool Gateway, simulation, learning, workflows
-    domain/           Pure business rules: risk, policy, events, decisions, messages
-    infrastructure/   Database, Razorpay and simulated providers, messaging, LangGraph advisor, Temporal
-    core/             Settings, logging, security, encryption
-  alembic/            Database migrations
-  scripts/            Seed data, hourly job, batch evaluation, Razorpay test round trip
-  tests/              Unit and integration tests
-frontend/
-  src/app/            Routes
-  src/features/       Screens by area (dashboard, cases, escalations, policies, simulator...)
-  src/services/api/   Typed API client
-  e2e/                Playwright end-to-end tests
-docs/                 Architecture, API, AI, MCP, development, deployment and environment guides
-render.yaml           Render Blueprint        docker-compose.yml   Local full stack
+
+---
+
+## Getting Started
+
+RecoverX can be executed locally using Docker Compose or by running the backend and frontend independently.
+
+### Prerequisites
+
+- Python 3.13
+- Node.js 22+
+- npm
+- Git
+- Docker and Docker Compose (for containerized execution)
+
+### Option 1: Run Using Docker
+
+Clone the repository:
+
+```bash
+git clone https://github.com/sritejaswini15/Revenue-Leakage-Detection-and-Automated-Recovery-System.git
+
+cd Revenue-Leakage-Detection-and-Automated-Recovery-System
 ```
 
-## Getting started
-
-**With Docker** (PostgreSQL, API and web app):
+Build and start the application:
 
 ```bash
 docker compose up --build
 ```
 
-**Without Docker** (Python 3.12+, Node.js 22+):
+Docker Compose starts the configured application services, including PostgreSQL, the FastAPI backend, and the Next.js frontend.
+
+### Option 2: Run Without Docker
+
+**Step 1: Clone the repository**
 
 ```bash
-# API on http://localhost:8000 (interactive docs at /docs)
-python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
+git clone https://github.com/sritejaswini15/Revenue-Leakage-Detection-and-Automated-Recovery-System.git
+
+cd Revenue-Leakage-Detection-and-Automated-Recovery-System
+```
+
+**Step 2: Set up the Python environment**
+
+```bash
+python -m venv .venv
+```
+
+Activate the environment:
+
+Windows PowerShell:
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+macOS / Linux:
+
+```bash
+source .venv/bin/activate
+```
+
+**Step 3: Install backend dependencies**
+
+```bash
 pip install -r backend/requirements-dev.txt
-cd backend && uvicorn app.main:app --reload
-
-# Web app on http://localhost:3000 (second terminal)
-cd frontend && npm ci && npm run dev
 ```
 
-On first start the API seeds a deterministic demo merchant with 1,000 customers and 500 recovery cases. Sign in with `admin@recoverx.local` / `recoverx-demo`. There are also `finance@`, `operator@` and `viewer@` accounts, one per role. Demo logins are never created in production.
-
-Open the **Simulator** to drive scenarios through the real pipeline. On a case, *Execute recovery* sends a payment link; open the customer payment page from the case and pay to see the case recovered and the dashboard update.
-
-## Environment variables
-
-Every setting has a local default, so nothing is required to run locally. The ones that matter most:
-
-| Variable | Purpose |
-|---|---|
-| `DATABASE_URL` | PostgreSQL connection (SQLite file if unset) |
-| `AUTH_SECRET`, `CREDENTIALS_ENCRYPTION_KEY` | Session signing and encryption of merchants' stored keys (required in production) |
-| `RAZORPAY_WEBHOOK_SECRET`, `BOOTSTRAP_RAZORPAY_ACCOUNT_ID` | Webhook verification and routing |
-| `PAYMENT_PROVIDER` | `simulated` (default) or `razorpay` with test keys |
-| `TEMPORAL_ENABLED` | Durable workflows instead of the hourly job |
-| `SENTRY_DSN`, `LOG_FORMAT` | Error reporting and JSON logs |
-
-Templates: [`.env.example`](.env.example) and [`.env.production.example`](.env.production.example). The complete reference is [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md). Never commit real values; the API refuses to start in production with development defaults.
-
-## Testing
+**Step 4: Start the backend**
 
 ```bash
-cd backend && pytest                 # unit and integration tests (SQLite; set TEST_DATABASE_URL for PostgreSQL)
-cd backend && ruff check . && ruff format --check .
-cd frontend && npm run lint && npm run typecheck && npm run build
-cd frontend && npm run e2e           # Playwright, against a running API and web app
+cd backend
+uvicorn app.main:app --reload
 ```
 
-At this commit: **312 backend tests** and **19 Playwright end-to-end tests** pass, and lint, formatting, type checks and the production build are clean. The suites include:
+The backend API will be available at:
 
-- an end-to-end trace of one failed payment to measured, recovered revenue;
-- tenant isolation and a check that every non-public endpoint refuses anonymous callers;
-- idempotency under replayed and racing requests;
-- MCP protocol behaviour;
-- the advisor's schema validation, single retry and fail-safe escalation to human review.
+```text
+http://localhost:8000
+```
 
-CI runs the backend suite on SQLite and PostgreSQL, checks that migrations match the models, and runs the frontend checks and Playwright.
+Interactive API documentation:
+
+```text
+http://localhost:8000/docs
+```
+
+**Step 5: Start the frontend**
+
+Open a second terminal:
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+The frontend will be available at:
+
+```text
+http://localhost:3000
+```
+
+---
+
+## Demo Environment
+
+On initial startup, RecoverX initializes a deterministic demonstration merchant containing:
+
+- 1,000 synthetic customers.
+- 500 recovery cases.
+- Demonstration accounts for different application roles.
+
+### Demo Credentials
+
+| Role | Email |
+|---|---|
+| Administrator | `admin@recoverx.local` |
+| Finance | `finance@recoverx.local` |
+| Operator | `operator@recoverx.local` |
+| Viewer | `viewer@recoverx.local` |
+
+**Demonstration password:** `recoverx-demo`
+
+These credentials are intended exclusively for local demonstration. Demo accounts are not created in production environments.
+
+### Exploring the Recovery Workflow
+
+To explore the application's functionality:
+
+1. Sign in using a demonstration account.
+2. Open the Command Center to examine recovery metrics.
+3. Navigate to the Simulator to generate payment and recovery scenarios.
+4. Open a recovery case to inspect its risk assessment and recommended strategy.
+5. Use Execute Recovery to initiate the simulated payment-link workflow.
+6. Open the customer payment page associated with the case.
+7. Complete the simulated payment to trigger recovery processing.
+8. Return to the dashboard to observe the updated case status and recovery analytics.
+
+This workflow demonstrates the complete recovery lifecycle through the application's actual processing pipeline.
+
+---
+
+## Environment Configuration
+
+RecoverX provides local defaults for its configuration settings. Production environments require explicitly configured secrets and service credentials.
+
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | Database connection string. PostgreSQL for deployment; SQLite when unset. |
+| `AUTH_SECRET` | Application authentication and session signing secret. |
+| `CREDENTIALS_ENCRYPTION_KEY` | Encryption key for stored merchant credentials. |
+| `RAZORPAY_WEBHOOK_SECRET` | Secret used for webhook signature verification. |
+| `BOOTSTRAP_RAZORPAY_ACCOUNT_ID` | Default Razorpay account routing configuration. |
+| `PAYMENT_PROVIDER` | Selects `simulated` or `razorpay` payment processing. |
+| `TEMPORAL_ENABLED` | Enables Temporal-based durable workflows. |
+| `SENTRY_DSN` | Optional Sentry error monitoring configuration. |
+| `LOG_FORMAT` | Configures structured logging output. |
+
+Environment templates:
+
+- [.env.example](.env.example)
+- [.env.production.example](.env.production.example)
+
+For the complete configuration reference, see [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md).
+
+**Security note:** Never commit API keys, webhook secrets, encryption keys, or production credentials to version control. Production configuration must use secure environment variables or a secrets management solution.
+
+---
+
+## Security Architecture
+
+Security is implemented across authentication, authorization, tenant isolation, event ingestion, and action execution.
+
+| Security Control | Implementation |
+|---|---|
+| Authentication | HttpOnly session cookies |
+| CSRF Protection | CSRF validation |
+| Authorization | Four server-enforced application roles |
+| Tenant Isolation | Merchant-scoped data access |
+| Webhook Security | HMAC-SHA256 signature verification |
+| Replay Protection | Event deduplication and idempotency |
+| Credential Protection | Encrypted merchant credentials |
+| Login Security | Login throttling |
+| Application Security | Security response headers |
+| Auditability | Structured audit events |
+| Logging | Request IDs and redacted logs |
+
+The application enforces authorization at the backend rather than relying on frontend visibility or client-side restrictions.
+
+---
+
+## Testing and Code Quality
+
+RecoverX includes automated backend and frontend validation.
+
+### Backend Tests
+
+Run the backend test suite:
+
+```bash
+cd backend
+pytest
+```
+
+The backend test suite covers:
+
+- Payment event ingestion.
+- Risk assessment and policy evaluation.
+- Recovery case lifecycle.
+- Tool Gateway execution.
+- Tenant isolation.
+- Authentication and authorization.
+- Idempotency under repeated and concurrent requests.
+- MCP protocol behavior.
+- AI advisor schema validation.
+- Retry and fail-safe escalation behavior.
+- Recovery outcome processing.
+
+PostgreSQL testing can be configured using `TEST_DATABASE_URL`.
+
+### Backend Code Quality
+
+```bash
+cd backend
+
+ruff check .
+ruff format --check .
+```
+
+### Frontend Validation
+
+```bash
+cd frontend
+
+npm run lint
+npm run typecheck
+npm run build
+```
+
+### End-to-End Testing
+
+With the API and frontend running:
+
+```bash
+cd frontend
+npm run e2e
+```
+
+Playwright tests validate important application workflows through the browser.
+
+### Current Test Coverage
+
+At the documented project revision:
+
+| Test Category | Tests |
+|---|---:|
+| Backend unit and integration tests | 312 |
+| Playwright end-to-end tests | 19 |
+| Total | 331 |
+
+The test suites include an end-to-end recovery trace, tenant isolation checks, idempotency validation, MCP behavior, and AI recommendation failure handling.
+
+### Continuous Integration
+
+GitHub Actions automates project validation through:
+
+- Backend test execution on SQLite and PostgreSQL.
+- Database migration consistency checks.
+- Python linting and formatting checks.
+- Frontend linting.
+- Type checking.
+- Production build validation.
+- Playwright end-to-end testing.
+
+---
 
 ## Deployment
 
-[`render.yaml`](render.yaml) is a Render Blueprint. It creates PostgreSQL, the API (runs migrations on start, health check `/health`), the web app and an hourly cron job for follow-ups and expiry. Secrets are entered in the Render dashboard, never in the repository. [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) covers first deployment, connecting Razorpay webhooks, optional Temporal, and a production checklist.
+RecoverX includes a Render Blueprint configuration through `render.yaml`.
 
-## What is real, what is simulated
+The deployment configuration provisions:
 
-| Integration | Status |
+- PostgreSQL database.
+- FastAPI backend service.
+- Next.js frontend service.
+- Scheduled hourly job for follow-ups and case expiry.
+
+The backend performs database migrations during startup and exposes a health-check endpoint at:
+
+```text
+/health
+```
+
+Production secrets are configured through the Render dashboard rather than committed to the repository.
+
+Refer to [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for deployment instructions, Razorpay webhook configuration, optional Temporal integration, and production readiness considerations.
+
+---
+
+## Integration Status and Implementation Scope
+
+RecoverX distinguishes between implemented application functionality and integrations that have been verified against external services.
+
+| Integration | Implementation Status |
 |---|---|
-| Webhooks, risk, policy, rule-based advisor, Tool Gateway, review queue, promises, learning, analytics, audit, MCP | Implemented and tested |
-| Razorpay | Simulated by default; a REST client for merchants' `rzp_test_` keys exists and is unit-tested, but has not been run against a real Razorpay account |
-| WhatsApp and email | Simulated: messages are stored, not sent |
-| Temporal | Workflows and worker exist; not run against a real Temporal server (the hourly job is the tested path) |
-| Sentry | Configured, not exercised against a real project |
+| Webhook ingestion and verification | Implemented and tested |
+| Deterministic risk engine | Implemented and tested |
+| Rules-based recovery advisor | Implemented and tested |
+| Merchant policy engine | Implemented and tested |
+| Tool Gateway | Implemented and tested |
+| Human review workflows | Implemented and tested |
+| Promise-to-pay and follow-ups | Implemented |
+| Recovery outcome learning | Implemented |
+| Audit trail and analytics | Implemented |
+| MCP server | Implemented and tested |
+| Razorpay | Simulated by default; REST client for test keys implemented and unit-tested, but not verified against a real Razorpay account |
+| WhatsApp and Email | Simulated; messages are stored rather than delivered |
+| Temporal | Workflow and worker implementations exist; real Temporal server execution has not been verified |
+| Sentry | Configured but not tested against a live project |
 
-The Integrations page reports this state at runtime.
+The Integrations page also reports integration status at runtime.
 
-## Limitations
+---
 
-- No real messaging provider yet; WhatsApp and email are simulated.
-- Razorpay, Temporal and Sentry need verification against the real services before production use.
-- No frontend unit tests; the UI is covered by type checking, lint and Playwright.
+## Current Limitations
 
-## Future enhancements
+- External WhatsApp and email delivery providers are not yet integrated.
+- Razorpay integration requires verification against an actual test-mode merchant account before production use.
+- Temporal workflows require validation against a running Temporal server.
+- Sentry integration has not been exercised against a live monitoring project.
+- Frontend functionality is covered by static validation and Playwright end-to-end tests; dedicated frontend unit tests are not currently included.
 
-- WhatsApp Business and email provider adapters behind the existing messaging interface.
-- A verified Razorpay test-mode round trip in CI, then live-mode readiness review.
-- Evaluate the rules-based advisor against a labelled set of cases.
-- A Temporal worker in the Render Blueprint for durable multi-day workflows.
-- Frontend component tests and accessibility checks.
+These limitations are documented to distinguish tested functionality from integrations that still require external service validation.
+
+---
+
+## Future Enhancements
+
+Potential areas for further development include:
+
+- Integration with WhatsApp Business and production email providers.
+- Verified Razorpay test-mode payment workflows and subsequent live-mode readiness.
+- Evaluation of the recovery advisor against a labeled dataset.
+- Dedicated Temporal worker deployment for durable multi-day recovery workflows.
+- Expanded recovery analytics and financial reporting.
+- Frontend component-level unit testing.
+- Accessibility validation and interface improvements.
+- Additional payment gateway integrations.
+
+---
 
 ## Documentation
 
-[Architecture](docs/ARCHITECTURE.md) · [API](docs/API.md) · [AI advisor](docs/AI.md) · [MCP](docs/MCP.md) · [Development](docs/DEVELOPMENT.md) · [Deployment](docs/DEPLOYMENT.md) · [Environment](docs/ENVIRONMENT.md)
+Detailed technical documentation is available in the `docs/` directory.
+
+| Document | Description |
+|---|---|
+| [Architecture](docs/ARCHITECTURE.md) | System architecture, components, and design decisions. |
+| [API Documentation](docs/API.md) | Backend API endpoints and request/response specifications. |
+| [AI Advisor](docs/AI.md) | Recovery advisor implementation and validation. |
+| [MCP Integration](docs/MCP.md) | MCP server, transport, and exposed tools. |
+| [Development Guide](docs/DEVELOPMENT.md) | Local development and contribution workflow. |
+| [Deployment Guide](docs/DEPLOYMENT.md) | Deployment configuration and production setup. |
+| [Environment Reference](docs/ENVIRONMENT.md) | Application environment variables and configuration. |
+
+---
+
+## Project Information
+
+**Project:** RecoverX – Revenue Leakage Detection and Automated Recovery System
+
+**Domain:** FinTech, Revenue Operations, Payment Automation, AI-Assisted Decision Systems
+
+**Architecture:** Modular Monolith
+
+**Backend:** Python, FastAPI
+
+**Frontend:** Next.js, React, TypeScript
+
+**AI Orchestration:** LangGraph
+
+**Workflow Orchestration:** Temporal
+
+**Payment Integration:** Razorpay
+
+---
+
+**RecoverX demonstrates the application of backend engineering, financial workflow automation, deterministic decision systems, AI-assisted recommendations, and secure payment operations to the problem of revenue leakage and recovery.**
