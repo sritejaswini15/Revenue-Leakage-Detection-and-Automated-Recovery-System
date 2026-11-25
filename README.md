@@ -1,6 +1,8 @@
 # RecoverX
 
-**An AI-assisted revenue recovery control plane for Razorpay merchants.** RecoverX turns failed payments, halted subscriptions, overdue invoices and abandoned checkouts into tracked recovery cases. It scores each case, has an advisor recommend a strategy, checks that strategy against the merchant's own policy, acts through a single audited gateway, and measures the money that comes back.
+**An AI-assisted revenue recovery control plane for Razorpay merchants.** 
+
+RecoverX turns failed payments, halted subscriptions, overdue invoices and abandoned checkouts into tracked recovery cases. It scores each case, has an advisor recommend a strategy, checks that strategy against the merchant's own policy, acts through a single audited gateway, and measures the money that comes back.
 
 ![Command center](docs/screenshots/command-center.png)
 
