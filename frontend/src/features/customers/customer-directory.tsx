@@ -26,13 +26,17 @@ export function CustomerDirectory() {
   const [offset, setOffset] = useState(0);
   const [showImport, setShowImport] = useState(false);
 
+  // Apply the search after a pause in typing. No timer unless the query would change: one left
+  // over from the first render would otherwise send the list back to page 1 after Next.
   useEffect(() => {
+    const next = search.trim();
+    if (next === query) return;
     const timer = window.setTimeout(() => {
-      setQuery(search.trim());
+      setQuery(next);
       setOffset(0);
     }, SEARCH_DELAY_MS);
     return () => window.clearTimeout(timer);
-  }, [search]);
+  }, [search, query]);
 
   const load = useCallback(
     () => api.customers.list({ search: query, contact, sort, limit: PAGE_SIZE, offset }),
